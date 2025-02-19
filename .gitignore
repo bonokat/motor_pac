@@ -1,0 +1,66 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+.env/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# VS Code settings
+.vscode/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Logs and databases
+*.log
+db.sqlite3
+
+# Cache files
+*.cache/
+
+# Testing
+.tox/
+nose2cache/
+.pytest_cache/
+coverage.xml
+htmlcov/
+
+# MyPy type checking
+.mypy_cache/
+
+# Ignore secrets
+.env
+*.pem
+*.key
+
+# Ignore generated files
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.npz
+*.npy
+
+
+# Ignore data files
+beh_data/
+dig_data/
+eeg_data/
+imgs/
+libeep-3.3.177/
+
+*.docx
+*.txt
+
+# Custom user files
+get-pip.py
+
