@@ -1,0 +1,103 @@
+# Study 1: surrogate-normalized PAC, Model 7
+# ------------------------------------------------------------
+# Purpose: reproduce the structure of the original Model 7 using
+# surrogate-normalized PAC (one row per subject x condition x ROI).
+# No surrogate iteration is treated as an independent observation.
+#
+# Run this script locally in RStudio after setting input_file/output_dir.
+# This script has NOT been executed by ChatGPT.
+
+library(lme4)
+library(car)
+library(emmeans)
+library(dplyr)
+
+# 1. EDIT THESE TWO PATHS ---------------------------------------
+input_file <- "F:/research project/# study 1/eeg_data/set/Y group/roi_source_analysis/surrogate_analysis/study1_surrogate_roi_summary.csv"
+output_dir <- "F:/research project/# study 1/eeg_data/set/Y group/roi_source_analysis/surrogate_analysis/model7_surrogate_z"
+
+if (!file.exists(input_file)) stop("Input CSV not found: ", input_file)
+dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+
+# 2. LOAD AND VALIDATE ------------------------------------------
+df <- read.csv(input_file, stringsAsFactors = FALSE)
+
+required <- c("sub", "task", "task_stage", "block", "condition",
+              "roi", "surrogate_z", "original_pac", "surrogate_sd",
+              "p_upper", "n_surrogates")
+missing <- setdiff(required, names(df))
+if (length(missing)) stop("Missing columns: ", paste(missing, collapse = ", "))
+
+df <- df %>%
+  mutate(
+    sub = factor(sub),
+    task_stage = factor(task_stage, levels = c("_plan", "_go")),
+    condition = factor(condition,
+                       levels = c("_BL", "_MAIN_baseline", "_MAIN_adaptation")),
+    roi = factor(roi)
+  )
+
+if (nrow(df) != 23 * 6 * 24) stop("Unexpected number of summary rows")
+if (nlevels(df$sub) != 23 || nlevels(df$roi) != 24) stop("Unexpected subjects or ROIs")
+if (anyNA(df[, c("sub", "task_stage", "condition", "roi", "surrogate_z")])) {
+  stop("Missing model input value or unexpected condition label")
+}
+if (any(!is.finite(df$surrogate_z))) stop("Non-finite surrogate z-score")
+if (!all(df$n_surrogates == 200)) stop("Not all observations have 200 surrogates")
+
+key <- c("sub", "condition", "task_stage", "roi")
+if (any(duplicated(df[key]))) stop("Duplicate subject-condition-stage-ROI combinations")
+
+cat("Input: ", nrow(df), " rows; ", nlevels(df$sub), " participants; ",
+    nlevels(df$roi), " ROIs\n", sep = "")
+print(with(df, table(condition, task_stage)))
+
+# 3. SAME MODEL 7 STRUCTURE; NEW DEPENDENT VARIABLE ------------
+model_7_z <- lmer(
+  surrogate_z ~ condition * roi * task_stage + (1 | sub),
+  data = df,
+  REML = TRUE,
+  control = lmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 2e5))
+)
+
+# Match the original analysis: Type II Wald chi-square tests.
+anova_type2 <- car::Anova(model_7_z, type = 2)
+
+# 4. MARGINAL MEANS AND CONTRASTS -------------------------------
+# Bonferroni correction within each family of pairwise contrasts.
+emm_condition_by_stage <- emmeans(model_7_z, ~ condition | task_stage)
+contrast_condition_by_stage <- pairs(emm_condition_by_stage, adjust = "bonferroni")
+
+emm_stage_by_condition <- emmeans(model_7_z, ~ task_stage | condition)
+contrast_stage_by_condition <- pairs(emm_stage_by_condition, adjust = "bonferroni")
+
+# 5. SAVE RESULTS -----------------------------------------------
+saveRDS(model_7_z, file.path(output_dir, "model7_surrogate_z.rds"))
+
+capture.output(
+  {
+    cat("MODEL 7: SURROGATE-NORMALIZED PAC\n\n")
+    print(summary(model_7_z))
+    cat("\nTYPE II WALD CHI-SQUARE ANOVA\n")
+    print(anova_type2)
+    cat("\nCONDITION WITHIN TASK STAGE\n")
+    print(emm_condition_by_stage)
+    print(contrast_condition_by_stage)
+    cat("\nSTAGE WITHIN CONDITION\n")
+    print(emm_stage_by_condition)
+    print(contrast_stage_by_condition)
+    cat("\nSINGULAR FIT: ", isSingular(model_7_z), "\n", sep = "")
+  },
+  file = file.path(output_dir, "model7_surrogate_z_results.txt")
+)
+
+write.csv(as.data.frame(anova_type2),
+          file.path(output_dir, "model7_surrogate_z_anova.csv"))
+write.csv(as.data.frame(contrast_condition_by_stage),
+          file.path(output_dir, "model7_surrogate_z_condition_by_stage.csv"),
+          row.names = FALSE)
+write.csv(as.data.frame(contrast_stage_by_condition),
+          file.path(output_dir, "model7_surrogate_z_stage_by_condition.csv"),
+          row.names = FALSE)
+
+cat("\nSaved model and tables to: ", output_dir, "\n", sep = "")
